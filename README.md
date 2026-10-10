@@ -9,6 +9,8 @@ and wait ~30–60 seconds. See `DEMO_GUIDE.md` for a 5-minute walkthrough.
 
 ---
 ## What it does (in plain words)
+- **Upload your own weather file (CSV)** → instant risk for every date + the next 5 days, downloadable results.
+- **Train models live** in the browser (bundled data or your own labelled file) and see test accuracy, ROC curves and SHAP.
 - Looks at the **last 14 days of weather** (temperature, humidity, rain, wind, cloud, sunshine).
 - Predicts the **risk (Low / Moderate / High)** of blight-friendly weather in the **next 5 days**.
 - Shows **why** (which weather factors raised or lowered the risk) using Explainable AI (SHAP).
@@ -48,6 +50,8 @@ src/build_dataset.py    daily features + labels       -> data/processed/daily.cs
 src/features.py         feature engineering, windows, labels
 src/train.py            train + compare all models    -> models/
 src/models.py           model code (LSTM runs in plain NumPy — no PyTorch needed to serve)
+src/lite.py             upload parsing + lite (daily-data) model
+src/make_samples.py     builds the sample upload files -> data/samples/
 src/live.py             live weather for the app
 DEPLOY.md               free hosting steps
 ```

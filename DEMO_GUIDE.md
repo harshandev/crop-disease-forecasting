@@ -1,34 +1,48 @@
-# Demo guide (5 minutes) — for the presenter
+# Demo guide (6 minutes) — for the presenter
 
-**Before the demo:** open the app link ~5 minutes early so it is awake. Have internet if possible
-(if not, the app falls back to saved sample data and still works).
+**Before the demo:** open the app link ~5 minutes early so it is awake. Internet is preferred
+(without it the app still works using saved data, except "Live forecast").
 
-## The one-sentence pitch
+## One-sentence pitch
 "Farmers usually notice blight after the leaves are damaged. This app warns them *days earlier*,
 from weather alone, so they can scout and protect their crop in time."
 
-## Walkthrough
-1. **Demo scenarios** (left menu → *Demo scenarios*). These are real weather from 2023–2024.
-   - *Humid misty week – Darjeeling*: gauge ~95% → **HIGH**. Point at the blue box: "and blight-friendly
-     conditions really did occur in those 5 days."
-   - *Building up – Nashik monsoon*: ~55% → **MODERATE**.
-   - *Dry spell – Udaipur*: ~2% → **LOW**.
-2. Click **Why this risk?** — "Red bars are what pushed the risk up, e.g. a run of humid, mild days."
-   (This is the Explainable-AI part.)
-3. Click **Weather** — the shaded part is the 5-day forecast window; dotted red line = 11 humid hours/day.
-4. Click **What to do** — preventive advice changes with the risk level.
-5. **Live forecast (today)** — pick a location; the app pulls today's real weather and gives today's risk.
-6. **Model comparison** tab — Logistic Regression, Random Forest and LSTM compared on unseen 2023–2024 data.
+## Walkthrough (left menu)
+### 1. Upload & predict  ← the main demo
+1. Open **"What should the file look like?"** → click **⬇ Sample: daily weather (Nashik)** to download a sample CSV
+   (or have your own weather file ready).
+2. Choose **Upload my file** and drop the CSV in. The app checks it and says what it found
+   ("Daily file detected → 92 days").
+3. Result appears instantly: **risk gauge (Low/Moderate/High)**, the next-5-day window, advice.
+4. **Why this risk?** → red bars = what pushed risk up (Explainable AI / SHAP).
+5. **Risk over time** → forecast for *every* date in the file + **Download results (CSV)**.
+6. Try the hourly sample (Ooty) too — it switches to the more precise "full model".
+7. Try **"daily + blight records"** sample → **Check vs real records** tab shows how well the forecasts matched the
+   recorded blight (with real field records this is the proof of accuracy).
+
+### 2. Train models (live)  ← show the training
+1. Click **▶ Train models now**. Watch the steps tick: data split by time → Logistic Regression → Random Forest → SHAP.
+2. Results on **unseen test data**: table, ROC curves, alerts-vs-reality grid, "what the model learned".
+3. Change the sliders (trees, depth) or switch to **Lite features** and train again.
+4. **My own labelled file** → tick the demo file (or upload a daily CSV with `blight_observed`) → **Train on my data** →
+   a model is trained on that data and gives a forecast.
+5. Open the **LSTM** panel: its training curve (it was trained offline because it needs PyTorch; the weights run here).
+
+### 3. Quick extras
+- **Demo scenarios** — real 2023-24 weather: High (Darjeeling), Moderate (Nashik), Low (Udaipur), with "what actually happened".
+- **Live forecast (today)** — real weather for a chosen location, right now.
+- **Replay a past date** — pick any date in 2023-24.
 
 ## Likely questions
 - **"Is this detecting disease on plants?"** No — it forecasts *risk from weather*, before symptoms. No photos are used.
-- **"How accurate is it?"** On unseen 2023–2024 forecasts: ROC-AUC ≈ 0.95; it catches ~83–88% of blight-friendly spells.
-- **"Which model is best?"** All three learned models beat a simple rule of thumb. LSTM catches the most; Random Forest is equally accurate and easiest to explain.
-- **"Was it trained on real outbreaks?"** It uses an established agronomic blight-infection rule on 10 years of real weather.
-  Validating with field outbreak records is the next step — we say so openly.
-- **"Will it work for my village?"** Pick the nearest region; adding a location is a small change (coordinates only).
+- **"How accurate is it?"** On unseen 2023–2024 forecasts ROC-AUC ≈ 0.95 (lite daily model ≈ 0.95 too); it catches ~83–88% of blight-friendly spells.
+- **"Which model is best?"** All three beat a simple rule of thumb. LSTM catches the most; Random Forest is equally accurate and easiest to explain.
+- **"Trained on real outbreaks?"** The built-in model uses an established agronomic blight rule on 10 years of real weather.
+  The Upload + Train pages let anyone test/train with their **own** outbreak records — that is the next validation step.
+- **"Which file formats?"** CSV, daily or hourly; column names are matched flexibly.
 - **"Does it cost anything?"** No — free weather data and free hosting for the prototype.
 
 ## If something goes wrong
-- *"App has gone to sleep"* → press the **Get this app back up** button, wait ~1 minute.
-- *Yellow "Live weather unavailable" message* → no internet; app shows saved sample data. Use **Demo scenarios**.
+- *"App has gone to sleep"* → press **Get this app back up**, wait ~1 minute.
+- *"Live weather unavailable"* → no internet; use Upload / Train / Demo scenarios instead.
+- *Upload error message* → it says exactly which column is missing; fix the header and re-upload.

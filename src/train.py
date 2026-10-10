@@ -43,19 +43,23 @@ def train_lstm(Xtr, ytr, Xva, yva, epochs=40):
     opt = torch.optim.Adam(net.parameters(), lr=2e-3, weight_decay=1e-4)
     loss_fn = nn.BCEWithLogitsLoss()
     best, best_state, patience = -1, None, 0
+    history = []
     for ep in range(epochs):
         net.train()
         perm = torch.randperm(len(Xtr_t))
+        losses = []
         for i in range(0, len(perm), 256):
             idx = perm[i:i + 256]
             opt.zero_grad()
             loss = loss_fn(net(Xtr_t[idx]), ytr_t[idx])
             loss.backward()
             opt.step()
+            losses.append(loss.item())
         net.eval()
         with torch.no_grad():
             pv = torch.sigmoid(net(Xva_t)).numpy()
         auc = roc_auc_score(yva, pv)
+        history.append({"epoch": ep + 1, "train_loss": float(np.mean(losses)), "val_auc": float(auc)})
         print(f"  epoch {ep + 1:2d}  val AUC {auc:.4f}")
         if auc > best:
             best, patience = auc, 0
@@ -65,7 +69,7 @@ def train_lstm(Xtr, ytr, Xva, yva, epochs=40):
             if patience >= 6:
                 break
     net.load_state_dict(best_state)
-    return net, mean, std
+    return net, mean, std, history
 
 
 def export_lstm(net, mean, std):
@@ -123,7 +127,7 @@ def main():
 
     # 3) LSTM
     print("Training LSTM ...")
-    net, mean, std = train_lstm(X[tr], y[tr], X[va], y[va])
+    net, mean, std, history = train_lstm(X[tr], y[tr], X[va], y[va])
     export_lstm(net, mean, std)
     p_lstm = NumpyLSTM().predict_proba(X)          # NumPy version = what the app will use
     with torch.no_grad():
@@ -136,6 +140,7 @@ def main():
         "n_windows": {"train": int(tr.sum()), "val": int(va.sum()), "test": int(te.sum())},
         "positive_rate_test": float(y[te].mean()),
         "results": results,
+        "lstm_history": history,
     }
     with open(MODELS_DIR / "metrics.json", "w") as f:
         json.dump(out, f, indent=1)
