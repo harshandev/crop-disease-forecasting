@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+import streamlit.components.v1 as components
 from plotly.subplots import make_subplots
 from sklearn.metrics import (average_precision_score, confusion_matrix, f1_score,
                              precision_score, recall_score, roc_auc_score, roc_curve)
@@ -19,13 +20,14 @@ from src.config import DATA_PROCESSED, HORIZON_DAYS, LOCATIONS, ROOT, WINDOW_DAY
 from src.features import PRETTY, make_windows, tabular_feature_names, window_to_tabular
 from src.lite import (LITE_IDX, LITE_PRETTY, group_name, lite_tabular, lite_tabular_names,
                       lite_windows, parse_upload)
-from src.live import fetch_recent_and_forecast
+from src.live import fetch_recent_and_forecast, geocode
 from src.models import (NumpyLSTM, build_all_windows, load_metrics, make_forest, make_logreg,
                         split_masks)
 
 st.set_page_config(page_title="Tomato Blight Early Warning", page_icon="🍅", layout="wide")
 
 SAMPLES = ROOT / "data" / "samples"
+_geolocate = components.declare_component("geolocate", path=str(ROOT / "components" / "geolocate"))
 LOW, HIGH = 0.30, 0.60
 COLORS = {"Low": "#2e9d5b", "Moderate": "#e0a100", "High": "#d93a3a"}
 FULL_MODELS = ["Random Forest", "LSTM (deep learning)", "Logistic Regression"]
@@ -517,27 +519,99 @@ def page_train(engine):
         c2.markdown(f"Next 5 days after {as_of:%d %b %Y}: **{p:.0%}** chance of blight being reported.")
 
 
+# ================================================================== location picker
+@st.cache_data(ttl=3600, show_spinner=False)
+def _geocode(q: str):
+    return geocode(q)
+
+
+def _km(lat1, lon1, lat2, lon2) -> float:
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    a = np.sin((p2 - p1) / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(np.radians(lon2 - lon1) / 2) ** 2
+    return float(6371 * 2 * np.arcsin(np.sqrt(a)))
+
+
+def choose_location():
+    """Sidebar location picker. Returns dict(label, lat, lon, preset) or None if nothing chosen yet."""
+    how = st.sidebar.radio("Where is your farm?", ["Preset region", "Search any place",
+                                                   "My current location (GPS)", "Enter coordinates"])
+    if how == "Preset region":
+        name = st.sidebar.selectbox("Farm location", list(LOCATIONS))
+        st.sidebar.caption(LOCATIONS[name]["note"])
+        return {"label": name, "lat": LOCATIONS[name]["lat"], "lon": LOCATIONS[name]["lon"], "preset": name}
+    if how == "Search any place":
+        q = st.sidebar.text_input("Village / town / city", placeholder="e.g. Kolar, Pune, Nairobi")
+        if len(q.strip()) < 2:
+            st.sidebar.caption("Type at least 2 letters.")
+            return None
+        try:
+            res = _geocode(q.strip())
+        except Exception:
+            st.sidebar.error("Place search needs internet. Try 'Enter coordinates' or a preset region.")
+            return None
+        if not res:
+            st.sidebar.warning("No place found. Try another spelling.")
+            return None
+        opts = {f"{r['name']}, {r.get('admin1', '')}, {r.get('country', '')}".replace(", ,", ","): r for r in res}
+        r = opts[st.sidebar.selectbox("Pick the right place", list(opts))]
+        return {"label": f"{r['name']}, {r.get('admin1', '')}, {r.get('country', '')}".replace(", ,", ","),
+                "lat": r["latitude"], "lon": r["longitude"], "preset": None}
+    if how == "My current location (GPS)":
+        with st.sidebar:
+            st.caption("Your browser will ask permission. Your location is used only to fetch weather for that spot "
+                       "and is not stored.")
+            val = _geolocate(key="gps_button", default=None)
+        if val and val.get("lat") is not None:
+            st.session_state["gps"] = val
+        elif val and val.get("error"):
+            st.sidebar.warning(f"Couldn't read your location ({val['error']}). Use 'Search any place' instead.")
+        g = st.session_state.get("gps")
+        if not g:
+            st.sidebar.info("Click the button above, then choose **Allow**.")
+            return None
+        return {"label": f"Your location ({g['lat']:.3f}, {g['lon']:.3f})", "lat": g["lat"], "lon": g["lon"], "preset": None}
+    c1, c2 = st.sidebar.columns(2)
+    lat = c1.number_input("Latitude", -90.0, 90.0, 24.585, format="%.4f")
+    lon = c2.number_input("Longitude", -180.0, 180.0, 73.712, format="%.4f")
+    return {"label": f"Custom point ({lat:.3f}, {lon:.3f})", "lat": lat, "lon": lon, "preset": None}
+
+
 # ================================================================== PAGE: live / scenarios / replay
 def page_history_modes(engine, mode):
     model = st.sidebar.selectbox("Prediction model", FULL_MODELS,
                                  help="Random Forest is the default: it is accurate and explainable.")
     idx, daily_all = engine["index"], load_daily()
     ctx = forecast_start = actual = None
-    if mode == "Live forecast (today)":
-        loc = st.sidebar.selectbox("Farm location", list(LOCATIONS))
-        st.sidebar.caption(LOCATIONS[loc]["note"])
+    if mode == "Live forecast (any location)":
+        place = choose_location()
+        if place is None:
+            st.title("Tomato Late Blight - 5-Day Early Warning")
+            st.info("👈 Choose a location in the sidebar to get a live forecast.")
+            st.stop()
+        loc = place["label"]
+        near = min(_km(place["lat"], place["lon"], v["lat"], v["lon"]) for v in LOCATIONS.values())
         try:
-            d_live, today = fetch_recent_and_forecast(LOCATIONS[loc]["lat"], LOCATIONS[loc]["lon"])
+            d_live, today = fetch_recent_and_forecast(place["lat"], place["lon"])
             past = d_live[d_live.index <= today].tail(WINDOW_DAYS)
             if len(past) < WINDOW_DAYS:
                 raise ValueError("not enough days returned")
-            X1 = make_windows(past, with_labels=False)[0][-1:]
+            past_w = past.copy()
+            if place["lat"] < 0:           # southern hemisphere: seasons are flipped
+                past_w.index = past.index + pd.Timedelta(days=182)
+            X1 = make_windows(past_w, with_labels=False)[0][-1:]
             as_of = past.index[-1]
             ctx = d_live[(d_live.index > as_of - pd.Timedelta(days=WINDOW_DAYS))
                          & (d_live.index <= as_of + pd.Timedelta(days=HORIZON_DAYS))]
             forecast_start = as_of + pd.Timedelta(days=1)
-            note = "🟢 Live weather from Open-Meteo (last 14 days + weather outlook)."
+            note = f"🟢 Live weather for ({place['lat']:.2f}, {place['lon']:.2f}) from Open-Meteo."
+            if near > 1000:
+                note += (f" ⚠ {near:,.0f} km from the regions the model was trained on - treat as indicative.")
         except Exception:
+            if place["preset"] is None:
+                st.title("Tomato Late Blight - 5-Day Early Warning")
+                st.error("Couldn't fetch live weather for that spot (internet or weather service issue). "
+                         "Try again, pick a preset region, or use **Upload & predict** with a weather file.")
+                st.stop()
             st.sidebar.warning("Live weather unavailable - showing the bundled sample (Dec 2024).")
             as_of = idx[idx.location == loc].iloc[-1].date
             X1 = engine["X"][np.where((idx.location == loc) & (idx.date == as_of))[0][:1]]
@@ -608,7 +682,7 @@ def page_about():
 - The built-in "blight-friendly" target is built from a published **agronomic rule** (Smith-period style: ≥11 h at ≥90% humidity with night temp ≥10 °C and day temp ≤27 °C on two days in a row), not from field-recorded outbreaks. The app therefore forecasts *disease-favourable weather risk*, the usual basis of blight early-warning systems; it does **not** confirm infection.
 - Not yet validated on field outbreak records - upload yours on the *Upload & predict* page to test it.
 - Weather-only: it does not know your variety, spraying history, or whether blight spores are present.
-- Live mode uses forecast-model weather, which differs slightly from the historical data used for training.
+- Live mode works for any location on Earth, but the model was trained on 6 Indian tomato regions - places far from these are shown as *indicative*. It uses forecast-model weather, which differs slightly from the historical training data. Your location is used only to fetch weather and is not stored.
 - Prototype for demonstration - not a substitute for local agricultural advice.
 - If the app was idle, the first load can take up to a minute.
 """)
@@ -618,7 +692,7 @@ def page_about():
 engine = load_engine()
 st.sidebar.title("🍅 Blight Early Warning")
 mode = st.sidebar.radio("What do you want to do?", [
-    "Upload & predict", "Train models (live)", "Live forecast (today)", "Demo scenarios",
+    "Upload & predict", "Train models (live)", "Live forecast (any location)", "Demo scenarios",
     "Replay a past date", "About & limits"])
 
 if mode == "Upload & predict":

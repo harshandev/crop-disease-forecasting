@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { margin: 0; font-family: sans-serif; }
+  button { width: 100%; padding: 9px 12px; border: 1px solid #2e9d5b; background: #2e9d5b; color: #fff;
+           border-radius: 8px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #26844c; }
+  #m { font-size: 12px; margin-top: 4px; color: #555; }
+</style>
+</head>
+<body>
+<button id="b">📍 Use my current location</button>
+<div id="m"></div>
+<script>
+  // Minimal Streamlit component protocol (no libraries needed).
+  function send(type, data) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: type }, data), "*");
+  }
+  send("streamlit:componentReady", { apiVersion: 1 });
+  send("streamlit:setFrameHeight", { height: 62 });
+  var m = document.getElementById("m");
+  document.getElementById("b").onclick = function () {
+    if (!navigator.geolocation) {
+      m.textContent = "This browser can't share location.";
+      send("streamlit:setComponentValue", { value: { error: "unsupported", ts: Date.now() }, dataType: "json" });
+      return;
+    }
+    m.textContent = "Asking your browser… (please click Allow)";
+    navigator.geolocation.getCurrentPosition(
+      function (p) {
+        m.textContent = "Location received ✓";
+        send("streamlit:setComponentValue", { dataType: "json",
+          value: { lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy, ts: Date.now() } });
+      },
+      function (e) {
+        m.textContent = "Couldn't get location: " + e.message;
+        send("streamlit:setComponentValue", { dataType: "json", value: { error: e.message, ts: Date.now() } });
+      },
+      { enableHighAccuracy: false, timeout: 15000, maximumAge: 600000 }
+    );
+  };
+</script>
+</body>
+</html>

@@ -9,6 +9,7 @@ and wait ~30–60 seconds. See `DEMO_GUIDE.md` for a 5-minute walkthrough.
 
 ---
 ## What it does (in plain words)
+- **Live forecast for ANY location**: search a place, use your device's GPS, or enter coordinates (not stored).
 - **Upload your own weather file (CSV)** → instant risk for every date + the next 5 days, downloadable results.
 - **Train models live** in the browser (bundled data or your own labelled file) and see test accuracy, ROC curves and SHAP.
 - Looks at the **last 14 days of weather** (temperature, humidity, rain, wind, cloud, sunshine).
@@ -52,7 +53,8 @@ src/train.py            train + compare all models    -> models/
 src/models.py           model code (LSTM runs in plain NumPy — no PyTorch needed to serve)
 src/lite.py             upload parsing + lite (daily-data) model
 src/make_samples.py     builds the sample upload files -> data/samples/
-src/live.py             live weather for the app
+src/live.py             live weather + place search for the app
+components/geolocate/   tiny browser-GPS button component
 DEPLOY.md               free hosting steps
 ```
 Rebuild everything: `pip install -r requirements.txt torch matplotlib` then

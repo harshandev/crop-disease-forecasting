@@ -28,3 +28,14 @@ def fetch_recent_and_forecast(lat: float, lon: float, timeout: int = 15):
     tz_offset = pd.Timedelta(seconds=js.get("utc_offset_seconds", 0))
     today = (pd.Timestamp.now(tz="UTC").tz_localize(None) + tz_offset).normalize()
     return daily, today
+
+
+GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+
+
+def geocode(name: str, count: int = 6, timeout: int = 10) -> list[dict]:
+    """Place name -> candidate locations (free Open-Meteo geocoding, no key)."""
+    r = requests.get(GEOCODE_URL, params={"name": name, "count": count, "language": "en", "format": "json"},
+                     timeout=timeout)
+    r.raise_for_status()
+    return r.json().get("results", []) or []

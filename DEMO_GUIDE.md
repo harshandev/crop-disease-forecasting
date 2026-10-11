@@ -30,7 +30,9 @@ from weather alone, so they can scout and protect their crop in time."
 
 ### 3. Quick extras
 - **Demo scenarios** — real 2023-24 weather: High (Darjeeling), Moderate (Nashik), Low (Udaipur), with "what actually happened".
-- **Live forecast (today)** — real weather for a chosen location, right now.
+- **Live forecast (any location)** — pick a preset region, **search any village/town/city**, tap **📍 My current location**
+  (browser asks permission), or type coordinates. The app pulls today's real weather for that spot and forecasts the next 5 days.
+  Tip: if the browser blocks GPS, use *Search any place* — it always works.
 - **Replay a past date** — pick any date in 2023-24.
 
 ## Likely questions
@@ -40,9 +42,12 @@ from weather alone, so they can scout and protect their crop in time."
 - **"Trained on real outbreaks?"** The built-in model uses an established agronomic blight rule on 10 years of real weather.
   The Upload + Train pages let anyone test/train with their **own** outbreak records — that is the next validation step.
 - **"Which file formats?"** CSV, daily or hourly; column names are matched flexibly.
+- **"Does it work for my farm, wherever it is?"** Yes for the weather pull (any place on Earth). The model was trained on 6 Indian tomato regions, so far-away places are shown with an "indicative" warning.
+- **"Do you store my location?"** No — it is only used to fetch weather for that spot.
 - **"Does it cost anything?"** No — free weather data and free hosting for the prototype.
 
 ## If something goes wrong
 - *"App has gone to sleep"* → press **Get this app back up**, wait ~1 minute.
 - *"Live weather unavailable"* → no internet; use Upload / Train / Demo scenarios instead.
+- *GPS says "User denied Geolocation"* → the viewer clicked Block; use **Search any place** (or allow location in the browser's address-bar icon).
 - *Upload error message* → it says exactly which column is missing; fix the header and re-upload.
